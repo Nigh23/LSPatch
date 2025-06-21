@@ -1,0 +1,71 @@
+steps:
+  # 第1步：检出代码
+  # 拉取你仓库里的所有代码到编译环境中
+  - name: Checkout repository
+    uses: actions/checkout@v4
+
+  # 第2步：设置Java环境
+  # 安装JDK 17，这是编译Android项目所必需的
+  - name: Set up JDK 17
+    uses: actions/setup-java@v4
+    with:
+      java-version: '17'
+      distribution: 'temurin'
+
+  # 第3步：应用自定义修复和去特征化
+  # 这一步执行我们之前在Termux脚本里做的所有修改操作
+  - name: Apply Defeature Patches and Fixes
+    run: |
+      echo ">>> Applying custom patches..."
+      
+      # 修改包名特征
+      echo "  - Patching package name: com.lspatch -> com.dnfm.core"
+      find . -type f -not -path "./.git/*" -exec sed -i 's/com\.lspatch/com.dnfm.core/g' {} +
+      
+      # 修改Native库名特征
+      echo "  - Patching native library name: liblspatch -> libcore"
+      find . -type f -name "CMakeLists.txt" -exec sed -i 's/liblspatch/libcore/g' {} +
+      
+      # 修改应用名特征
+      echo "  - Patching app name: LSPatch -> CorePatch"
+      find . -path "*/res/values/strings.xml" -exec sed -i 's/>LSPatch</>CorePatch</g' {} +
+      
+      echo ">>> Patches applied successfully!"
+
+  # 第4步：设置Gradle缓存（可选，但能加速后续编译）
+  - name: Cache Gradle packages
+    uses: actions/cache@v4
+    with:
+      path: |
+        ~/.gradle/caches
+        ~/.gradle/wrapper
+      key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+      restore-keys: |
+        ${{ runner.os }}-gradle-
+
+  # 第5步：赋予Gradle Wrapper执行权限
+  - name: Grant execute permission to gradlew
+    run: chmod +x gradlew
+
+  # 第6步：开始编译项目
+  # 执行核心的编译命令
+  - name: Build with Gradle
+    run: ./gradlew assembleRelease
+
+  # 第7.1步：为产物创建目录
+  - name: Create Artifact Directory
+    run: mkdir -p artifacts
+
+  # 第7.2步：查找并移动APK到产物目录
+  - name: Find and move APKs
+    run: |
+      find . -type f -name "*.apk" -exec mv {} artifacts/ \;
+      ls -l artifacts/
+
+  # 第8步：上传编译产物
+  # 将artifacts目录下的所有文件打包成一个zip，供你下载
+  - name: Upload Artifact
+    uses: actions/upload-artifact@v4
+    with:
+      name: Defeatured-LSPatch-APKs
+      path: artifacts/
